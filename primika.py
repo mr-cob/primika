@@ -52,7 +52,7 @@ def interpret_program(program):
         elif op[0] == OP_MINUS:
             a = stack.pop()
             b = stack.pop()
-            stack.append(a - b)
+            stack.append(b - a)
         elif op[0] == OP_DUMP:
             a = stack.pop()
             print(a)
@@ -113,10 +113,12 @@ def compile_program(program, output_path):
                 out.write("    ;; minus\n")
                 out.write("    pop rax\n")
                 out.write("    pop rbx\n")
-                out.write("    sub rax, rbx\n")
-                out.write("    push rax\n")
+                out.write("    sub rbx, rax\n")
+                out.write("    push rbx\n")
             elif op[0] == OP_DUMP:
                 out.write("    ;; dump\n")
+                out.write("    pop rdi\n")
+                out.write("    call dump\n")
             else:
                 assert False, "Unreachable"
         out.write("    mov rax, 60\n")
@@ -124,23 +126,11 @@ def compile_program(program, output_path):
         out.write("    syscall\n")
 
 
-program = [
-    push(1),
-    push(1),
-    plus(),
-    dump(),
-    push(1),
-    push(1),
-    minus(),
-    dump()
-]
-
-
 def usage():
     print("Usage: primika <SUBCOMMANDS> [ARGS]")
     print("SUBCOMMANDS:")
-    print("    int        Interpret the program")
-    print("    com        Compile the program")
+    print("    i        Interpret the program")
+    print("    c        Compile the program")
 
 
 def call_cmd(command):
@@ -148,17 +138,50 @@ def call_cmd(command):
     print(f"+ {command}")
 
 
+def uncons(xs):
+    return (xs[0], xs[1:])
+
+
+def parse_word_as_op(word):
+    assert OP_COUNT == 4, "Exhaustive handling of operation in `parse_word_as_op`"
+    if word == '+':
+        return plus()
+    elif word == '-':
+        return minus()
+    elif word == '.':
+        return dump()
+    else:
+        return push(int(word))
+
+
+def load_program_from_file(input_file_path):
+    with open(input_file_path, "r") as f:
+        return [parse_word_as_op(word) for word in f.read().split()]
+
+
 if __name__ == "__main__":
-    if len(argv) < 2:
+    (_, argv) = uncons(argv)
+    if len(argv) < 1:
         usage()
         print(f"ERROR: no subcommand provided")
         exit(1)
 
-    subcommand = argv[1]
-
-    if subcommand == "int":
+    (subcommand, argv) = uncons(argv)
+    if subcommand == "i":
+        if len(argv) < 1:
+            usage()
+            print("ERROR: no input file provided.")
+            exit(1)
+        (input_file_path, argv) = uncons(argv)
+        program = load_program_from_file(input_file_path)
         interpret_program(program)
-    elif subcommand == "com":
+    elif subcommand == "c":
+        if len(argv) < 1:
+            usage()
+            print("ERROR: no input file provided.")
+            exit(1)
+        (input_file_path, argv) = uncons(argv)
+        program = load_program_from_file(input_file_path)
         compile_program(program, "output.asm")
         call_cmd("nasm -felf64 output.asm")
         call_cmd("ld -o output output.o")
