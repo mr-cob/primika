@@ -24,6 +24,7 @@ OP_PUSH = iota(True)
 OP_PLUS = iota()
 OP_MINUS = iota()
 OP_DUMP = iota()
+OP_DUP = iota()
 OP_EQUAL = iota()
 OP_GREATER = iota()
 OP_IF = iota()
@@ -46,6 +47,10 @@ def minus():
 
 def dump():
     return (OP_DUMP, )
+
+
+def dup():
+    return (OP_DUP, )
 
 
 def equal():
@@ -78,7 +83,7 @@ def interpret_program(program):
     ip = 0
 
     while ip < len(program):
-        assert OP_COUNT == 9, 'Exhaustive handling of operation in `interpret_program`'
+        assert OP_COUNT == 10, 'Exhaustive handling of operation in `interpret_program`'
         op = program[ip]
 
         if op[0] == OP_PUSH:
@@ -97,6 +102,11 @@ def interpret_program(program):
         elif op[0] == OP_DUMP:
             a = stack.pop()
             print(a)
+            ip += 1
+        elif op[0] == OP_DUP:
+            a = stack.pop()
+            stack.append(a)
+            stack.append(a)
             ip += 1
         elif op[0] == OP_EQUAL:
             a = stack.pop()
@@ -170,7 +180,7 @@ def compile_program(program, output_path):
         out.write('global   _start\n')
         out.write('_start:\n')
         for ip in range(len(program)):
-            assert OP_COUNT == 9, 'Exhaustive handling of operation in `compile_program`'
+            assert OP_COUNT == 10, 'Exhaustive handling of operation in `compile_program`'
             op = program[ip]
 
             if op[0] == OP_PUSH:
@@ -192,6 +202,11 @@ def compile_program(program, output_path):
                 out.write('    ;; --- dump ---\n')
                 out.write('    pop rdi\n')
                 out.write('    call dump\n')
+            elif op[0] == OP_DUP:
+                out.write('    ;; --- dup ---\n')
+                out.write('    pop rax\n')
+                out.write('    push rax\n')
+                out.write('    push rax\n')
             elif op[0] == OP_EQUAL:
                 out.write('    ;; --- equal ---\n')
                 out.write('    mov rcx, 0\n')
@@ -208,7 +223,7 @@ def compile_program(program, output_path):
                 out.write('    pop rax\n')
                 out.write('    pop rbx\n')
                 out.write('    cmp rax, rbx\n')
-                out.write('    cmove rcx, rdx\n')
+                out.write('    cmovg rcx, rdx\n')
                 out.write('    push rcx\n')
             elif op[0] == OP_IF:
                 assert len(
@@ -241,7 +256,7 @@ def crossreference_blocks(program):
     stack = []
     for ip in range(len(program)):
         op = program[ip]
-        assert OP_COUNT == 9, 'Exhaustive handeling of ops in `crossreference_blocks`'
+        assert OP_COUNT == 10, 'Exhaustive handeling of ops in `crossreference_blocks`'
         if op[0] == OP_IF:
             stack.append(ip)
         elif op[0] == OP_ELSE:
@@ -281,13 +296,15 @@ def lex_file(filepath):
 
 def parse_token_as_op(token):
     (filepath, row, col, lexeme) = token
-    assert OP_COUNT == 9, 'Exhaustive handling of operation in `parse_token_as_op`'
+    assert OP_COUNT == 10, 'Exhaustive handling of operation in `parse_token_as_op`'
     if lexeme == '+':
         return plus()
     elif lexeme == '-':
         return minus()
     elif lexeme == '.':
         return dump()
+    elif lexeme == 'dup':
+        return dup()
     elif lexeme == '=':
         return equal()
     elif lexeme == '>':

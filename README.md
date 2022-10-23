@@ -1,10 +1,11 @@
 # primika
 
-## a stack based programing language.
+## a stack based programing language
 
 </br>
 
 **includes**
+
 - compiler (to native).
 - interpreter.
 
