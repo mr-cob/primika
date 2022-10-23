@@ -25,6 +25,8 @@ OP_PLUS = iota()
 OP_MINUS = iota()
 OP_DUMP = iota()
 OP_EQUAL = iota()
+OP_IF = iota()
+OP_END = iota()
 OP_COUNT = iota()
 
 
@@ -40,12 +42,20 @@ def minus():
     return (OP_MINUS, )
 
 
+def dump():
+    return (OP_DUMP, )
+
+
 def equal():
     return (OP_EQUAL, )
 
 
-def dump():
-    return (OP_DUMP, )
+def iff():
+    return (OP_IF, )
+
+
+def end():
+    return (OP_END, )
 
 
 ###################################
@@ -55,25 +65,44 @@ def dump():
 
 def interpret_program(program):
     stack = []
-    for op in program:
-        assert OP_COUNT == 5, 'Exhaustive handling of operation in `interpret_program`'
+    ip = 0
+
+    while ip < len(program):
+        assert OP_COUNT == 7, 'Exhaustive handling of operation in `interpret_program`'
+        op = program[ip]
+
         if op[0] == OP_PUSH:
             stack.append(op[1])
+            ip += 1
         elif op[0] == OP_PLUS:
             a = stack.pop()
             b = stack.pop()
             stack.append(a + b)
+            ip += 1
         elif op[0] == OP_MINUS:
             a = stack.pop()
             b = stack.pop()
             stack.append(b - a)
+            ip += 1
+        elif op[0] == OP_DUMP:
+            a = stack.pop()
+            print(a)
+            ip += 1
         elif op[0] == OP_EQUAL:
             a = stack.pop()
             b = stack.pop()
             stack.append(int(a == b))
-        elif op[0] == OP_DUMP:
+            ip += 1
+        elif op[0] == OP_IF:
             a = stack.pop()
-            print(a)
+            if a == 0:
+                assert len(
+                    op) == 2, '`if` does not have reference to the end block'
+                ip = op[1]
+            else:
+                ip += 1
+        elif op[0] == OP_END:
+            ip += 1
         else:
             assert False, 'Unreachable'
 
@@ -121,35 +150,47 @@ def compile_program(program, output_path):
         out.write('    ret\n')
         out.write('global   _start\n')
         out.write('_start:\n')
-        for op in program:
-            assert OP_COUNT == 5, 'Exhaustive handling of operation in `compile_program`'
+        for ip in range(len(program)):
+            assert OP_COUNT == 7, 'Exhaustive handling of operation in `compile_program`'
+            op = program[ip]
+
             if op[0] == OP_PUSH:
-                out.write(f'    ;; push {op[1]}\n')
+                out.write(f'    ;; --- push --- {op[1]}\n')
                 out.write(f'    push {op[1]}\n')
             elif op[0] == OP_PLUS:
-                out.write('    ;; plus\n')
+                out.write('    ;; --- plus ---\n')
                 out.write('    pop rax\n')
                 out.write('    pop rbx\n')
                 out.write('    add rax, rbx\n')
                 out.write('    push rax\n')
             elif op[0] == OP_MINUS:
-                out.write('    ;; minus\n')
+                out.write('    ;; --- minus ---\n')
                 out.write('    pop rax\n')
                 out.write('    pop rbx\n')
                 out.write('    sub rbx, rax\n')
                 out.write('    push rbx\n')
+            elif op[0] == OP_DUMP:
+                out.write('    ;; --- dump ---\n')
+                out.write('    pop rdi\n')
+                out.write('    call dump\n')
             elif op[0] == OP_EQUAL:
-                out.write('    ;; equal\n')
+                out.write('    ;; --- equal ---\n')
                 out.write('    mov rcx, 0\n')
                 out.write('    mov rdx, 1\n')
                 out.write('    pop rax\n')
                 out.write('    pop rbx\n')
                 out.write('    cmp rax, rbx\n')
                 out.write('    cmove rcx, rdx\n')
-            elif op[0] == OP_DUMP:
-                out.write('    ;; dump\n')
-                out.write('    pop rdi\n')
-                out.write('    call dump\n')
+                out.write('    push rcx\n')
+            elif op[0] == OP_IF:
+                assert len(
+                    op) == 2, '`if` does not have reference to the end block'
+                out.write('    ;; --- if ---\n')
+                out.write('    pop rax\n')
+                out.write('    test rax, rax\n')
+                out.write(f'    jz addr_{op[1]}\n')
+            elif op[0] == OP_END:
+                out.write(f'    addr_{ip}:\n')
             else:
                 assert False, 'Unreachable'
         out.write('    mov rax, 60\n')
@@ -160,6 +201,20 @@ def compile_program(program, output_path):
 ###################################
 #            Tokenizer            #
 ###################################
+
+
+def crossreference_blocks(program):
+    stack = []
+    for ip in range(len(program)):
+        op = program[ip]
+        assert OP_COUNT == 7, 'Exhaustive handeling of ops in `crossreference_blocks`'
+        if op[0] == OP_IF:
+            stack.append(ip)
+        elif op[0] == OP_END:
+            if_ip = stack.pop()
+            assert program[if_ip][0] == OP_IF, 'End can only close `if`'
+            program[if_ip] = (OP_IF, ip)
+    return program
 
 
 def find_col(line, start, predicate):
@@ -185,15 +240,19 @@ def lex_file(filepath):
 
 def parse_token_as_op(token):
     (filepath, row, col, lexeme) = token
-    assert OP_COUNT == 5, 'Exhaustive handling of operation in `parse_token_as_op`'
+    assert OP_COUNT == 7, 'Exhaustive handling of operation in `parse_token_as_op`'
     if lexeme == '+':
         return plus()
     elif lexeme == '-':
         return minus()
-    elif lexeme == '=':
-        return equal()
     elif lexeme == '.':
         return dump()
+    elif lexeme == '=':
+        return equal()
+    elif lexeme == 'if':
+        return iff()
+    elif lexeme == 'end':
+        return end()
     else:
         try:
             return push(int(lexeme))
@@ -205,7 +264,8 @@ def parse_token_as_op(token):
 
 def load_program_from_file(filepath):
     with open(filepath, 'r') as f:
-        return [parse_token_as_op(token) for token in lex_file(filepath)]
+        return crossreference_blocks(
+            [parse_token_as_op(token) for token in lex_file(filepath)])
 
 
 ###################################
