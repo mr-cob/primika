@@ -1,6 +1,6 @@
 # primika
 
-## a stack based programing language
+## following tsoding's stack based programing language porth
 
 </br>
 
