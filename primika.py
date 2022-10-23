@@ -20,14 +20,15 @@ def iota(reset=False):
     return iota_count
 
 
-OP_PUSH = iota(True)
-OP_PLUS = iota()
-OP_MINUS = iota()
-OP_DUMP = iota()
-OP_EQUAL = iota()
-OP_IF = iota()
-OP_END = iota()
-OP_COUNT = iota()
+OP_PUSH = iota(True)    # 0
+OP_PLUS = iota()        # 1
+OP_MINUS = iota()       # 2
+OP_DUMP = iota()        # 3
+OP_EQUAL = iota()       # 4
+OP_IF = iota()          # 5
+OP_ELSE = iota()        # 6
+OP_END = iota()         # 7
+OP_COUNT = iota()       # 8
 
 
 def push(x):
@@ -54,6 +55,10 @@ def iff():
     return (OP_IF, )
 
 
+def elze():
+    return (OP_ELSE, )
+
+
 def end():
     return (OP_END, )
 
@@ -68,7 +73,7 @@ def interpret_program(program):
     ip = 0
 
     while ip < len(program):
-        assert OP_COUNT == 7, 'Exhaustive handling of operation in `interpret_program`'
+        assert OP_COUNT == 8, 'Exhaustive handling of operation in `interpret_program`'
         op = program[ip]
 
         if op[0] == OP_PUSH:
@@ -101,6 +106,10 @@ def interpret_program(program):
                 ip = op[1]
             else:
                 ip += 1
+        elif op[0] == OP_ELSE:
+            assert len(
+                op) == 2, '`else` does not have reference to the end block'
+            ip = op[1]
         elif op[0] == OP_END:
             ip += 1
         else:
@@ -151,7 +160,7 @@ def compile_program(program, output_path):
         out.write('global   _start\n')
         out.write('_start:\n')
         for ip in range(len(program)):
-            assert OP_COUNT == 7, 'Exhaustive handling of operation in `compile_program`'
+            assert OP_COUNT == 8, 'Exhaustive handling of operation in `compile_program`'
             op = program[ip]
 
             if op[0] == OP_PUSH:
@@ -184,13 +193,19 @@ def compile_program(program, output_path):
                 out.write('    push rcx\n')
             elif op[0] == OP_IF:
                 assert len(
-                    op) == 2, '`if` does not have reference to the end block'
+                    op) == 2, '`if` does not have reference to the `end` block'
                 out.write('    ;; --- if ---\n')
                 out.write('    pop rax\n')
                 out.write('    test rax, rax\n')
                 out.write(f'    jz addr_{op[1]}\n')
+            elif op[0] == OP_ELSE:
+                assert len(
+                    op) == 2, '`else` does not have reference to the `end` block'
+                out.write('    ;; --- else ---\n')
+                out.write(f'    jmp addr_{op[1]}\n')
+                out.write(f'addr_{ip + 1}:\n')
             elif op[0] == OP_END:
-                out.write(f'    addr_{ip}:\n')
+                out.write(f'addr_{ip}:\n')
             else:
                 assert False, 'Unreachable'
         out.write('    mov rax, 60\n')
@@ -207,13 +222,20 @@ def crossreference_blocks(program):
     stack = []
     for ip in range(len(program)):
         op = program[ip]
-        assert OP_COUNT == 7, 'Exhaustive handeling of ops in `crossreference_blocks`'
+        assert OP_COUNT == 8, 'Exhaustive handeling of ops in `crossreference_blocks`'
         if op[0] == OP_IF:
             stack.append(ip)
-        elif op[0] == OP_END:
+        elif op[0] == OP_ELSE:
             if_ip = stack.pop()
-            assert program[if_ip][0] == OP_IF, 'End can only close `if`'
-            program[if_ip] = (OP_IF, ip)
+            assert program[if_ip][0] == OP_IF, '`else` can only use with `if`'
+            program[if_ip] = (OP_IF, ip + 1)
+            stack.append(ip)
+        elif op[0] == OP_END:
+            block_ip = stack.pop()
+            if program[block_ip][0] == OP_IF or program[block_ip][0] == OP_ELSE:
+                program[block_ip] = (program[block_ip][0], ip)
+            else:
+                assert False, '`end` can only close `if` and `else`'
     return program
 
 
@@ -240,7 +262,7 @@ def lex_file(filepath):
 
 def parse_token_as_op(token):
     (filepath, row, col, lexeme) = token
-    assert OP_COUNT == 7, 'Exhaustive handling of operation in `parse_token_as_op`'
+    assert OP_COUNT == 8, 'Exhaustive handling of operation in `parse_token_as_op`'
     if lexeme == '+':
         return plus()
     elif lexeme == '-':
@@ -251,6 +273,8 @@ def parse_token_as_op(token):
         return equal()
     elif lexeme == 'if':
         return iff()
+    elif lexeme == 'else':
+        return elze()
     elif lexeme == 'end':
         return end()
     else:
