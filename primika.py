@@ -20,15 +20,16 @@ def iota(reset=False):
     return iota_count
 
 
-OP_PUSH = iota(True)    # 0
-OP_PLUS = iota()        # 1
-OP_MINUS = iota()       # 2
-OP_DUMP = iota()        # 3
-OP_EQUAL = iota()       # 4
-OP_IF = iota()          # 5
-OP_ELSE = iota()        # 6
-OP_END = iota()         # 7
-OP_COUNT = iota()       # 8
+OP_PUSH = iota(True)
+OP_PLUS = iota()
+OP_MINUS = iota()
+OP_DUMP = iota()
+OP_EQUAL = iota()
+OP_GREATER = iota()
+OP_IF = iota()
+OP_ELSE = iota()
+OP_END = iota()
+OP_COUNT = iota()
 
 
 def push(x):
@@ -49,6 +50,10 @@ def dump():
 
 def equal():
     return (OP_EQUAL, )
+
+
+def greater():
+    return (OP_GREATER, )
 
 
 def iff():
@@ -73,7 +78,7 @@ def interpret_program(program):
     ip = 0
 
     while ip < len(program):
-        assert OP_COUNT == 8, 'Exhaustive handling of operation in `interpret_program`'
+        assert OP_COUNT == 9, 'Exhaustive handling of operation in `interpret_program`'
         op = program[ip]
 
         if op[0] == OP_PUSH:
@@ -97,6 +102,11 @@ def interpret_program(program):
             a = stack.pop()
             b = stack.pop()
             stack.append(int(a == b))
+            ip += 1
+        elif op[0] == OP_GREATER:
+            a = stack.pop()
+            b = stack.pop()
+            stack.append(int(a > b))
             ip += 1
         elif op[0] == OP_IF:
             a = stack.pop()
@@ -160,7 +170,7 @@ def compile_program(program, output_path):
         out.write('global   _start\n')
         out.write('_start:\n')
         for ip in range(len(program)):
-            assert OP_COUNT == 8, 'Exhaustive handling of operation in `compile_program`'
+            assert OP_COUNT == 9, 'Exhaustive handling of operation in `compile_program`'
             op = program[ip]
 
             if op[0] == OP_PUSH:
@@ -184,6 +194,15 @@ def compile_program(program, output_path):
                 out.write('    call dump\n')
             elif op[0] == OP_EQUAL:
                 out.write('    ;; --- equal ---\n')
+                out.write('    mov rcx, 0\n')
+                out.write('    mov rdx, 1\n')
+                out.write('    pop rax\n')
+                out.write('    pop rbx\n')
+                out.write('    cmp rax, rbx\n')
+                out.write('    cmove rcx, rdx\n')
+                out.write('    push rcx\n')
+            elif op[0] == OP_GREATER:
+                out.write('    ;; --- grater ---\n')
                 out.write('    mov rcx, 0\n')
                 out.write('    mov rdx, 1\n')
                 out.write('    pop rax\n')
@@ -222,7 +241,7 @@ def crossreference_blocks(program):
     stack = []
     for ip in range(len(program)):
         op = program[ip]
-        assert OP_COUNT == 8, 'Exhaustive handeling of ops in `crossreference_blocks`'
+        assert OP_COUNT == 9, 'Exhaustive handeling of ops in `crossreference_blocks`'
         if op[0] == OP_IF:
             stack.append(ip)
         elif op[0] == OP_ELSE:
@@ -262,7 +281,7 @@ def lex_file(filepath):
 
 def parse_token_as_op(token):
     (filepath, row, col, lexeme) = token
-    assert OP_COUNT == 8, 'Exhaustive handling of operation in `parse_token_as_op`'
+    assert OP_COUNT == 9, 'Exhaustive handling of operation in `parse_token_as_op`'
     if lexeme == '+':
         return plus()
     elif lexeme == '-':
@@ -271,6 +290,8 @@ def parse_token_as_op(token):
         return dump()
     elif lexeme == '=':
         return equal()
+    elif lexeme == '>':
+        return greater()
     elif lexeme == 'if':
         return iff()
     elif lexeme == 'else':
