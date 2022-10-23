@@ -116,7 +116,7 @@ def interpret_program(program):
         elif op[0] == OP_GREATER:
             a = stack.pop()
             b = stack.pop()
-            stack.append(int(a > b))
+            stack.append(int(a < b))
             ip += 1
         elif op[0] == OP_IF:
             a = stack.pop()
@@ -220,8 +220,8 @@ def compile_program(program, output_path):
                 out.write('    ;; --- grater ---\n')
                 out.write('    mov rcx, 0\n')
                 out.write('    mov rdx, 1\n')
-                out.write('    pop rax\n')
                 out.write('    pop rbx\n')
+                out.write('    pop rax\n')
                 out.write('    cmp rax, rbx\n')
                 out.write('    cmovg rcx, rdx\n')
                 out.write('    push rcx\n')
