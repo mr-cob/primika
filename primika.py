@@ -24,6 +24,7 @@ OP_PUSH = iota(True)
 OP_PLUS = iota()
 OP_MINUS = iota()
 OP_DUMP = iota()
+OP_EQUAL = iota()
 OP_COUNT = iota()
 
 
@@ -39,6 +40,10 @@ def minus():
     return (OP_MINUS, )
 
 
+def equal():
+    return (OP_EQUAL, )
+
+
 def dump():
     return (OP_DUMP, )
 
@@ -51,7 +56,7 @@ def dump():
 def interpret_program(program):
     stack = []
     for op in program:
-        assert OP_COUNT == 4, 'Exhaustive handling of operation in `interpret_program`'
+        assert OP_COUNT == 5, 'Exhaustive handling of operation in `interpret_program`'
         if op[0] == OP_PUSH:
             stack.append(op[1])
         elif op[0] == OP_PLUS:
@@ -62,6 +67,10 @@ def interpret_program(program):
             a = stack.pop()
             b = stack.pop()
             stack.append(b - a)
+        elif op[0] == OP_EQUAL:
+            a = stack.pop()
+            b = stack.pop()
+            stack.append(int(a == b))
         elif op[0] == OP_DUMP:
             a = stack.pop()
             print(a)
@@ -113,7 +122,7 @@ def compile_program(program, output_path):
         out.write('global   _start\n')
         out.write('_start:\n')
         for op in program:
-            assert OP_COUNT == 4, 'Exhaustive handling of operation in `compile_program`'
+            assert OP_COUNT == 5, 'Exhaustive handling of operation in `compile_program`'
             if op[0] == OP_PUSH:
                 out.write(f'    ;; push {op[1]}\n')
                 out.write(f'    push {op[1]}\n')
@@ -129,6 +138,14 @@ def compile_program(program, output_path):
                 out.write('    pop rbx\n')
                 out.write('    sub rbx, rax\n')
                 out.write('    push rbx\n')
+            elif op[0] == OP_EQUAL:
+                out.write('    ;; equal\n')
+                out.write('    mov rcx, 0\n')
+                out.write('    mov rdx, 1\n')
+                out.write('    pop rax\n')
+                out.write('    pop rbx\n')
+                out.write('    cmp rax, rbx\n')
+                out.write('    cmove rcx, rdx\n')
             elif op[0] == OP_DUMP:
                 out.write('    ;; dump\n')
                 out.write('    pop rdi\n')
@@ -168,11 +185,13 @@ def lex_file(filepath):
 
 def parse_token_as_op(token):
     (filepath, row, col, lexeme) = token
-    assert OP_COUNT == 4, 'Exhaustive handling of operation in `parse_token_as_op`'
+    assert OP_COUNT == 5, 'Exhaustive handling of operation in `parse_token_as_op`'
     if lexeme == '+':
         return plus()
     elif lexeme == '-':
         return minus()
+    elif lexeme == '=':
+        return equal()
     elif lexeme == '.':
         return dump()
     else:
@@ -197,13 +216,13 @@ def load_program_from_file(filepath):
 def usage():
     print('Usage: primika <SUBCOMMANDS> [ARGS]')
     print('SUBCOMMANDS:')
-    print('    i        Interpret the program')
-    print('    c        Compile the program')
+    print('    i <source_file>       Interpret the program')
+    print('    c <source_file>       Compile the program')
 
 
 def call_cmd(command):
     run(command.split(' '))
-    print(f'+ {command}')
+    print(f'[CMD] {command}')
 
 
 def uncons(xs):
